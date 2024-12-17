@@ -7,3 +7,8 @@ cmake --build .
 cmake --build . --config Release
 
 ./build/Release/lajolla.exe ./scenes/cbox/cbox.xml
+
+
+# HW1
+./build/Release/lajolla.exe .\scenes\disney_bsdf_test\simple_sphere.xml -filename
+
