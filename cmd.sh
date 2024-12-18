@@ -10,5 +10,6 @@ cmake --build . --config Release
 
 
 # HW1
-./build/Release/lajolla.exe .\scenes\disney_bsdf_test\simple_sphere.xml -filename
+./build/Release/lajolla.exe .\scenes\disney_bsdf_test\simple_sphere.xml
+./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_diffuse.xml
 
