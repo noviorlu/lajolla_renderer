@@ -13,7 +13,9 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     }
 
     // Homework 1: implement this!
-    Vector3 h = normalize(dir_in + dir_out);
+    Vector3 h = dir_in + dir_out;
+    if(length_squared(h) == 0) h = vertex.shading_frame.n;
+    h = normalize(h);
     Real hdout = max(0.0, dot(h, dir_out));
     Real ndin = max(0.0, dot(frame.n, dir_in));
     Real ndout = max(0.0, dot(frame.n, dir_out));
@@ -23,16 +25,16 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     Real ss = eval(bsdf.subsurface, vertex.uv, vertex.uv_screen_size, texture_pool);
 
     auto FresnelSchlick = [](Real F0, Real cosTheta) {
-        return 1.0, F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5);
+        return 1.0 + (F0 - 1.0) * pow(1.0 - cosTheta, 5);
     };
 
     // 2012 Disney BRDF
+    // if(ndout == 0) return make_zero_spectrum();
     // Real FSS90 = roughness * hdout * hdout;
     // Real FD90 = 0.5 + 2 * FSS90;
-    // Spectrum baseDiffuse = base_color / c_PI * FresnelSchlick(FD90, ndin) * FresnelSchlick(FD90, ndout) * ndout;
-    // Spectrum subsurface = 1.25 * base_color / c_PI 
-    //         * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1/(ndin+ndout) - 0.5) + 0.5 ) * ndout;
-    // return (1 - ss) * baseDiffuse + ss * subsurface;
+    // Real baseCoeff = FresnelSchlick(FD90, ndin) * FresnelSchlick(FD90, ndout);
+    // Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
+    // return base_color / c_PI * ( (1.0 - ss) * baseCoeff + ss * ssCoeff ) * ndout;
     
     // 2015 Disney BSDF
     Real FL = pow((1 - ndin), Real(5));
@@ -40,11 +42,11 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     Real FSS90 = roughness * hdout * hdout;
     Real Rr = 2 * FSS90;
 
-    Spectrum lambert = base_color / c_PI;
-    Spectrum subsurface = 1.25 * base_color / c_PI 
-            * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1/(ndin+ndout) - 0.5) + 0.5 ) * ndout;
-    Spectrum retro_reflection = lambert * Rr * (FL + FV + FL * FV * (Rr - 1));
-    return ((1 - ss) * lambert + ss * subsurface) * (1 - 0.5 * FL) * (1 - 0.5 * FV) + retro_reflection;
+    Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
+    Real retroCoeff = Rr * (FL + FV + FL * FV * (Rr - 1));
+    Real lambertCoeff = (1.0 - ss) + ss * ssCoeff;
+    
+    return base_color / c_PI * (lambertCoeff * (1 - 0.5 * FL) * (1 - 0.5 * FV) + retroCoeff) * ndout;
 }
 
 Real pdf_sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {

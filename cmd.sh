@@ -8,7 +8,7 @@ cmake --build . --config Release
 
 ./build/Release/lajolla.exe ./scenes/cbox/cbox.xml
 
-
+msbuild ./build/lajolla.sln /p:Configuration=Release
 # HW1
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\simple_sphere.xml
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_diffuse.xml
