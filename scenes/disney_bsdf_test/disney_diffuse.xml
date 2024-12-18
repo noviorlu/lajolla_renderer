@@ -19,8 +19,8 @@
 
 		<bsdf type="disneydiffuse">
 			<rgb name="baseColor" value="0.82 0.67 0.16"/>
-			<float name="roughness" value="1.0"/>
-			<float name="subsurface" value="1.0"/>
+			<float name="roughness" value="0.5"/>
+			<float name="subsurface" value="0.5"/>
 		</bsdf>
 	</shape>
 
@@ -41,7 +41,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
-			<string name="filename" value="images/disney_diffuse_1.0_1.0.exr"/>
+			<string name="filename" value="images/disney_diffuse_0.5_0.5.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>

@@ -29,24 +29,25 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     };
 
     // 2012 Disney BRDF
-    // if(ndout == 0) return make_zero_spectrum();
-    // Real FSS90 = roughness * hdout * hdout;
-    // Real FD90 = 0.5 + 2 * FSS90;
-    // Real baseCoeff = FresnelSchlick(FD90, ndin) * FresnelSchlick(FD90, ndout);
-    // Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
-    // return base_color / c_PI * ( (1.0 - ss) * baseCoeff + ss * ssCoeff ) * ndout;
+    if(ndout == 0) return make_zero_spectrum();
+    Real FSS90 = roughness * hdout * hdout;
+    Real FD90 = 0.5 + 2 * FSS90;
+    Real baseCoeff = FresnelSchlick(FD90, ndin) * FresnelSchlick(FD90, ndout);
+    Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
+    return base_color / c_PI * ( (1.0 - ss) * baseCoeff + ss * ssCoeff ) * ndout;
     
     // 2015 Disney BSDF
-    Real FL = pow((1 - ndin), Real(5));
-    Real FV = pow((1 - ndout), Real(5));
-    Real FSS90 = roughness * hdout * hdout;
-    Real Rr = 2 * FSS90;
+    // if(ndout == 0) return make_zero_spectrum();
+    // Real FL = pow((1 - ndin), Real(5));
+    // Real FV = pow((1 - ndout), Real(5));
+    // Real FSS90 = roughness * hdout * hdout;
+    // Real Rr = 2 * FSS90;
 
-    Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
-    Real retroCoeff = Rr * (FL + FV + FL * FV * (Rr - 1));
-    Real lambertCoeff = (1.0 - ss) + ss * ssCoeff;
+    // Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
+    // Real retroCoeff = Rr * (FL + FV + FL * FV * (Rr - 1));
+    // Real lambertCoeff = (1.0 - ss) + ss * ssCoeff;
     
-    return base_color / c_PI * (lambertCoeff * (1 - 0.5 * FL) * (1 - 0.5 * FV) + retroCoeff) * ndout;
+    // return base_color / c_PI * (lambertCoeff * (1 - 0.5 * FL) * (1 - 0.5 * FV) + retroCoeff) * ndout;
 }
 
 Real pdf_sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {
