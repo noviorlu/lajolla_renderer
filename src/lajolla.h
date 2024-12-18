@@ -70,6 +70,11 @@ inline T min(const T &a, const T &b) {
     return a < b ? a : b;
 }
 
+template <typename T>
+inline T clamp(const T &x, const T &min, const T &max) {
+    return x < min ? min : (x > max ? max : x);
+}
+
 inline Real radians(const Real deg) {
     return (c_PI / Real(180)) * deg;
 }
