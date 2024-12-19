@@ -42,8 +42,11 @@ inline Spectrum schlick_generalized_fresnel(
     Spectrum lazanyi_a = lazanyi_numerator / lazanyi_denominator;
 
     Spectrum f = base_clr + (r90 - base_clr) * pow(1 - h_dot_out, alpha) - lazanyi_a * h_dot_out * pow(1 - h_dot_out, 6);
-
-    return clamp(f, Spectrum(0), Spectrum(1));
+    f = normalize(f);
+    if(f.x < 0 || f.y < 0 || f.z < 0) {
+        return Spectrum(0.0);
+    }
+    return f;
 }
 
 
@@ -93,6 +96,12 @@ inline Real GTR2(Real n_dot_h, Real roughness) {
 inline Real GTR2Aniso(Vector3f h, Real alpha_x, Real alpha_y){
     Real t = (h.x * h.x) / (alpha_x * alpha_x) + (h.y * h.y) / (alpha_y * alpha_y) + h.z * h.z;
     return 1 / (c_PI * alpha_x * alpha_y * t * t);
+}
+
+inline Real GTR1(Real n_dot_h, Real alpha_g) {
+    Real a2 = alpha_g * alpha_g;
+    Real t = 1 + (a2 - 1) * n_dot_h * n_dot_h;
+    return (a2-1) / (c_PI * log(a2) * t);
 }
 
 inline Real GGX(Real n_dot_h, Real roughness) {
