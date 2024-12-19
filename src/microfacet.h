@@ -26,6 +26,7 @@ inline T schlick_fresnel(const T &F0, Real cos_theta) {
         pow(max(1 - cos_theta, Real(0)), Real(5));
 }
 
+// https://renderwonk.com/publications/wp-generalization-adobe/gen-adobe.pdf
 inline Spectrum schlick_generalized_fresnel(
     const Spectrum &base_clr,
     Real h_dot_out,
