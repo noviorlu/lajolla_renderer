@@ -12,8 +12,29 @@ Spectrum eval_op::operator()(const DisneyMetal &bsdf) const {
         frame = -frame;
     }
     // Homework 1: implement this!
+    Vector3 half_vector = normalize(dir_in + dir_out);
+    Real n_dot_h = dot(frame.n, half_vector);
+    Real n_dot_in = dot(frame.n, dir_in);
+    Real n_dot_out = dot(frame.n, dir_out);
+    Real h_dot_out = dot(half_vector, dir_out);
+    if (n_dot_out <= 0 || n_dot_h <= 0) {
+        return make_zero_spectrum();
+    }
 
-    return make_zero_spectrum();
+    Spectrum base_clr = eval(bsdf.base_color, vertex.uv, vertex.uv_screen_size, texture_pool);
+    Real roughness = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+    roughness = std::clamp(roughness, Real(0.01), Real(1));
+    Real aniso = eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool);
+    Real alpha_x, alpha_y;
+    AnisoTransform(roughness, aniso, alpha_x, alpha_y);
+
+    
+    Spectrum F_m = schlick_fresnel(base_clr, h_dot_out);
+    Real D_m = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
+    Real G_m = smith_masking_gtr2_aniso(to_local(frame, dir_in), alpha_x, alpha_y) *
+               smith_masking_gtr2_aniso(to_local(frame, dir_out), alpha_x, alpha_y);
+
+    return F_m * D_m * G_m / (4 * n_dot_in);
 }
 
 Real pdf_sample_bsdf_op::operator()(const DisneyMetal &bsdf) const {
@@ -27,9 +48,25 @@ Real pdf_sample_bsdf_op::operator()(const DisneyMetal &bsdf) const {
     if (dot(frame.n, dir_in) < 0) {
         frame = -frame;
     }
+    
     // Homework 1: implement this!
+    Vector3 half_vector = normalize(dir_in + dir_out);
+    Real n_dot_in = dot(frame.n, dir_in);
+    Real n_dot_out = dot(frame.n, dir_out);
+    Real n_dot_h = dot(frame.n, half_vector);
+    if (n_dot_out <= 0 || n_dot_h <= 0) {
+        return 0;
+    }
 
-    return 0;
+    Real roughness = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+    roughness = std::clamp(roughness, Real(0.01), Real(1));
+    Real aniso = eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool);
+    Real alpha_x, alpha_y;
+    AnisoTransform(roughness, aniso, alpha_x, alpha_y);
+
+    Real D = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
+
+    return D / (4 * n_dot_in);
 }
 
 std::optional<BSDFSampleRecord>
@@ -43,9 +80,22 @@ std::optional<BSDFSampleRecord>
     if (dot(frame.n, dir_in) < 0) {
         frame = -frame;
     }
+    
     // Homework 1: implement this!
+    Real roughness = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+    roughness = clamp(roughness, Real(0.01), Real(1));
+    Real aniso = eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool);    
+    Real alpha_x, alpha_y;
+    AnisoTransform(roughness, aniso, alpha_x, alpha_y);
 
-    return {};
+    Vector3 local_micro_normal = sample_visible_normals(to_local(frame, dir_in), alpha_x, alpha_y, rnd_param_uv);
+    
+    Vector3 half_vector = to_world(frame, local_micro_normal);
+    Vector3 reflected = normalize(-dir_in + 2 * dot(dir_in, half_vector) * half_vector);
+    return BSDFSampleRecord{
+        reflected,
+        Real(0) /* eta */, roughness /* roughness */
+    };
 }
 
 TextureSpectrum get_texture_op::operator()(const DisneyMetal &bsdf) const {

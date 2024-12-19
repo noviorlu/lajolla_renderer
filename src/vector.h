@@ -30,6 +30,9 @@ struct TVector3 {
     TVector3() {}
 
     template <typename T2>
+    TVector3(T2 x) : x(T(x)), y(T(x)), z(T(x)) {}
+
+    template <typename T2>
     TVector3(T2 x, T2 y, T2 z) : x(T(x)), y(T(y)), z(T(z)) {}
 
     template <typename T2>

@@ -56,7 +56,7 @@ struct DisneyDiffuse {
 struct DisneyMetal {
     Texture<Spectrum> base_color;
     Texture<Real> roughness;
-    Texture<Real> anisotropic;
+    Texture<Real> anisotropic; // x axis 1.0, y axis anisotropic
 };
 
 /// For homework 1: the transmissive component of the Disney BRDF.

@@ -22,7 +22,7 @@
 /// https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
 template <typename T>
 inline T schlick_fresnel(const T &F0, Real cos_theta) {
-    return F0 + (Real(1) - F0) *
+    return F0 + (T(1) - F0) *
         pow(max(1 - cos_theta, Real(0)), Real(5));
 }
 
@@ -55,11 +55,23 @@ inline Real fresnel_dielectric(Real n_dot_i, Real eta) {
     return fresnel_dielectric(fabs(n_dot_i), n_dot_t, eta);
 }
 
+inline void AnisoTransform(const Real& roughness, const Real& aniso, Real& alpha_x, Real& alpha_y) {
+    Real r2 = roughness * roughness;
+    Real aspect = sqrt(1 - aniso * 0.9);
+    alpha_x = max(Real(0.0001), r2 / aspect);
+    alpha_y = max(Real(0.0001), r2 * aspect);
+}
+
 inline Real GTR2(Real n_dot_h, Real roughness) {
     Real alpha = roughness * roughness;
     Real a2 = alpha * alpha;
     Real t = 1 + (a2 - 1) * n_dot_h * n_dot_h;
     return a2 / (c_PI * t*t);
+}
+
+inline Real GTR2Aniso(Vector3f h, Real alpha_x, Real alpha_y){
+    Real t = (h.x * h.x) / (alpha_x * alpha_x) + (h.y * h.y) / (alpha_y * alpha_y) + h.z * h.z;
+    return 1 / (c_PI * alpha_x * alpha_y * t * t);
 }
 
 inline Real GGX(Real n_dot_h, Real roughness) {
@@ -77,6 +89,14 @@ inline Real smith_masking_gtr2(const Vector3 &v_local, Real roughness) {
     Real a2 = alpha * alpha;
     Vector3 v2 = v_local * v_local;
     Real Lambda = (-1 + sqrt(1 + (v2.x * a2 + v2.y * a2) / v2.z)) / 2;
+    return 1 / (1 + Lambda);
+}
+
+inline Real smith_masking_gtr2_aniso(const Vector3 &v_local, Real alpha_x, Real alpha_y) {
+    Real x_part = v_local.x * alpha_x;
+    Real y_part = v_local.y * alpha_y;
+
+    Real Lambda = (-1 + sqrt(1 + (x_part * x_part + y_part * y_part) / v_local.z / v_local.z) ) / 2;
     return 1 / (1 + Lambda);
 }
 
