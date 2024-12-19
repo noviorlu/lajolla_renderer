@@ -135,10 +135,9 @@ std::optional<BSDFSampleRecord>
     // Clamp roughness to avoid numerical issues.
     roughness = std::clamp(roughness, Real(0.01), Real(1));
     // Sample a micro normal and transform it to world space -- this is our half-vector.
-    Real alpha = roughness * roughness;
     Vector3 local_dir_in = to_local(frame, dir_in);
     Vector3 local_micro_normal =
-        sample_visible_normals(local_dir_in, alpha, rnd_param_uv);
+        sample_visible_normals(local_dir_in, Real(1), Real(1), rnd_param_uv);
 
     Vector3 half_vector = to_world(frame, local_micro_normal);
     // Flip half-vector if it's below surface

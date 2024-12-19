@@ -18,6 +18,12 @@
 			<float name="roughness" value="0.2"/>
 			<float name="anisotropic" value="0.8"/>
 		</bsdf>
+		<!-- <bsdf type="roughplastic">
+			<rgb name="diffuseReflectance" value="0.82 0.67 0.16"/>
+			<spectrum name="specularReflectance" value="1"/>
+			<float name="intIOR" value="2"/>
+			<float name="roughness" value="0.2"/>
+		</bsdf> -->
 	</shape>
 
 	<sensor type="perspective" id="Camera-camera">
@@ -37,6 +43,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+			<string name="filename" value="images/disney_metal.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>

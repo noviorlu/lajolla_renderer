@@ -140,9 +140,8 @@ std::optional<BSDFSampleRecord>
             bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
         // Clamp roughness to avoid numerical issues.
         roughness = std::clamp(roughness, Real(0.01), Real(1));
-        Real alpha = roughness * roughness;
         Vector3 local_micro_normal =
-            sample_visible_normals(local_dir_in, alpha, rnd_param_uv);
+            sample_visible_normals(local_dir_in, Real(1), Real(1), rnd_param_uv);
         
         // Transform the micro normal to world space
         Vector3 half_vector = to_world(frame, local_micro_normal);
