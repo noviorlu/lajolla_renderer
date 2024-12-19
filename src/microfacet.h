@@ -26,6 +26,24 @@ inline T schlick_fresnel(const T &F0, Real cos_theta) {
         pow(max(1 - cos_theta, Real(0)), Real(5));
 }
 
+inline Spectrum schlick_generalized_fresnel(
+    const Spectrum &base_clr,
+    Real h_dot_out,
+    Real alpha,
+    Real tint_strength,
+    const Spectrum &tint
+) {
+    Real cos82 = 0.13917310096; // cos(82°), for θ_max
+    Spectrum r90 = Spectrum(1.0);
+
+    Spectrum lazanyi_numerator = (r90 - base_clr + (base_clr - tint) * pow(Real(1) - cos82, alpha)) * tint_strength;
+    Real lazanyi_denominator = cos82 * pow(1 - cos82, 6);
+    Spectrum lazanyi_a = lazanyi_numerator / lazanyi_denominator;
+
+    return base_clr + (r90 - base_clr) * pow(1 - h_dot_out, alpha) - lazanyi_a * h_dot_out * pow(1 - h_dot_out, 6);
+}
+
+
 /// Fresnel equation of a dielectric interface.
 /// https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
 /// n_dot_i: abs(cos(incident angle))

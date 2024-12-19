@@ -28,8 +28,13 @@ Spectrum eval_op::operator()(const DisneyMetal &bsdf) const {
     Real alpha_x, alpha_y;
     AnisoTransform(roughness, aniso, alpha_x, alpha_y);
 
+
+    Spectrum tint = Spectrum(0.0, 1.0, 0.0);
+    Real tint_strength = 1.0;
     
-    Spectrum F_m = schlick_fresnel(base_clr, h_dot_out);
+    // Spectrum F_m = schlick_fresnel(base_clr, h_dot_out);
+    Spectrum F_m = schlick_generalized_fresnel(base_clr, h_dot_out, 5.0, tint_strength, tint);
+
     Real D_m = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
     Real G_m = smith_masking_gtr2_aniso(to_local(frame, dir_in), alpha_x, alpha_y) *
                smith_masking_gtr2_aniso(to_local(frame, dir_out), alpha_x, alpha_y);
