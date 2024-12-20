@@ -32,8 +32,8 @@ Spectrum eval_op::operator()(const DisneyMetal &bsdf) const {
     Spectrum tint = Spectrum(0.0, 1.0, 0.0);
     Real tint_strength = 1.0;
     
-    // Spectrum F_m = schlick_fresnel(base_clr, h_dot_out);
-    Spectrum F_m = schlick_generalized_fresnel(base_clr, h_dot_out, 5.0, tint_strength, tint);
+    Spectrum F_m = schlick_fresnel(base_clr, h_dot_out);
+    // Spectrum F_m = schlick_generalized_fresnel(base_clr, h_dot_out, 5.0, tint_strength, tint);
 
     Real D_m = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
     Real G_m = smith_masking_gtr2_aniso(to_local(frame, dir_in), alpha_x, alpha_y) *
@@ -56,9 +56,9 @@ Real pdf_sample_bsdf_op::operator()(const DisneyMetal &bsdf) const {
     
     // Homework 1: implement this!
     Vector3 half_vector = normalize(dir_in + dir_out);
-    Real n_dot_in = dot(frame.n, dir_in);
     Real n_dot_out = dot(frame.n, dir_out);
     Real n_dot_h = dot(frame.n, half_vector);
+    Real h_dot_in = dot(half_vector, dir_in);
     if (n_dot_out <= 0 || n_dot_h <= 0) {
         return 0;
     }
@@ -71,7 +71,7 @@ Real pdf_sample_bsdf_op::operator()(const DisneyMetal &bsdf) const {
 
     Real D = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
 
-    return D / (4 * n_dot_in);
+    return D / (4 * h_dot_in);
 }
 
 std::optional<BSDFSampleRecord>

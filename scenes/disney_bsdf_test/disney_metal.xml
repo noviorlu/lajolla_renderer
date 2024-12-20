@@ -15,7 +15,7 @@
 
 		<bsdf type="disneymetal">
 			<rgb name="baseColor" value="0.82 0.67 0.16"/>
-			<float name="roughness" value="0.0"/>
+			<float name="roughness" value="0.2"/>
 			<float name="anisotropic" value="0.8"/>
 		</bsdf>
 	</shape>
@@ -37,7 +37,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
-			<string name="filename" value="images/disney_metal_0.0_0.8.exr"/>
+			<string name="filename" value="images/disney_metal.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>

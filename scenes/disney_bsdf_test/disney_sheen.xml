@@ -36,6 +36,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+			<string name="filename" value="images/disney_sheen.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>
