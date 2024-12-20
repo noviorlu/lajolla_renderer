@@ -42,10 +42,9 @@ inline Spectrum schlick_generalized_fresnel(
     Spectrum lazanyi_a = lazanyi_numerator / lazanyi_denominator;
 
     Spectrum f = base_clr + (r90 - base_clr) * pow(1 - h_dot_out, alpha) - lazanyi_a * h_dot_out * pow(1 - h_dot_out, 6);
-    f = normalize(f);
-    if(f.x < 0 || f.y < 0 || f.z < 0) {
-        return Spectrum(0.0);
-    }
+    f.x = clamp(f.x, Real(0), Real(1));
+    f.y = clamp(f.y, Real(0), Real(1));
+    f.z = clamp(f.z, Real(0), Real(1));
     return f;
 }
 
