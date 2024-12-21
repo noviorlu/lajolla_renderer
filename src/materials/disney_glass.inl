@@ -25,11 +25,9 @@ Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
 
     Vector3 half_vector;
     if(reflect)half_vector = normalize(dir_in + dir_out); 
-    else {
-        half_vector = normalize(-dir_in - eta * dir_out);
-        if(length_squared(-dir_in - eta * dir_out) < 1e-3) {
-            half_vector = normalize(cross(cross(dir_out, frame.n), dir_out));
-        }
+    else half_vector = normalize(-dir_in - eta * dir_out);
+    if(length_squared(-dir_in - eta * dir_out) < 1e-3) {
+        half_vector = normalize(cross(cross(dir_out, frame.n), dir_out));
     }
     if (dot(half_vector, frame.n) < 0) half_vector = -half_vector;
 
@@ -37,7 +35,7 @@ Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
     Real h_dot_out = dot(half_vector, dir_out); // cos(theta_t)
 
     
-    Real F_g =  fresnel_dielectric(std::abs(h_dot_in), eta);
+    Real F_g =  fresnel_dielectric(h_dot_in, eta);
     Real G_g = smith_masking_gtr2_aniso(to_local(frame, dir_in), alpha_x, alpha_y) *
                smith_masking_gtr2_aniso(to_local(frame, dir_out), alpha_x, alpha_y);
     Real D_g = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
@@ -49,7 +47,8 @@ Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
     {
         Real denominator = h_dot_in + h_dot_out * eta;
         // return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in * eta * eta / ( denominator * denominator );
-        return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in / ( denominator * denominator );
+        // return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in / ( denominator * denominator );
+        return base_clr * ((1 - F_g) * G_g * D_g * abs(h_dot_in * h_dot_out)) * eta * eta / (abs(n_dot_in) * denominator * denominator);
     }
 }
 
@@ -75,6 +74,9 @@ Real pdf_sample_bsdf_op::operator()(const DisneyGlass &bsdf) const {
     Vector3 half_vector;
     if(reflect)half_vector = normalize(dir_in + dir_out); 
     else half_vector = normalize(dir_in + eta * dir_out);
+    if(length_squared(-dir_in - eta * dir_out) < 1e-3) {
+        half_vector = normalize(cross(cross(dir_out, frame.n), dir_out));
+    }
     if (dot(half_vector, frame.n) < 0) half_vector = -half_vector;
 
     Real h_dot_in = dot(half_vector, dir_in);
@@ -87,8 +89,9 @@ Real pdf_sample_bsdf_op::operator()(const DisneyGlass &bsdf) const {
     else
     {
         Real numerator = h_dot_in + h_dot_out * eta;
+        if (fabs(numerator) < 1e-4) numerator = 1e-4;
         Real jacobian = eta * eta / (numerator * numerator);
-        return (1 - F_g) * D_g * jacobian * fabs(h_dot_in);
+        return (1 - F_g) * D_g * fabs(h_dot_out * h_dot_in / dot(frame.n, dir_in)) * jacobian;
     }
 }
 
@@ -108,7 +111,8 @@ Vector3 refract(const Vector3 &i, const Vector3 &h, Real eta) {
     if(cos_theta_i < 0) half = -h;
 
     Real cos_theta_t = sqrt(1 - sin2_theta_t);
-    return normalize(-i / eta + (fabs(cos_theta_i) / eta - cos_theta_t) * half);
+    if (fabs(cos_theta_t) < 1e-6) cos_theta_t = 1e-6;
+    return normalize(-i / eta + (fabs(cos_theta_i) / eta - cos_theta_t) * half + 1e-6 * half);
 }
 
 std::optional<BSDFSampleRecord>
@@ -143,6 +147,7 @@ std::optional<BSDFSampleRecord>
         return BSDFSampleRecord{ refracted, eta, roughness };
     }
 }
+
 TextureSpectrum get_texture_op::operator()(const DisneyGlass &bsdf) const {
     return bsdf.base_color;
 }
