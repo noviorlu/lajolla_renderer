@@ -42,34 +42,33 @@ Spectrum eval_op::operator()(const DisneyBSDF &bsdf) const {
         Real metallic = eval(bsdf.metallic, vertex.uv, vertex.uv_screen_size, texture_pool);
         Real cc = eval(bsdf.clearcoat, vertex.uv, vertex.uv_screen_size, texture_pool);
         Real sh = eval(bsdf.sheen, vertex.uv, vertex.uv_screen_size, texture_pool);
-        Real eta = bsdf.eta;
-        
         Spectrum C0;
         {
             Real l = luminance(base_clr);
             Spectrum Ctint = Spectrum(1);
             if (l > 0) Ctint = base_clr / l;
-            Spectrum Ks = Spectrum(1-specular_tint) + specular_tint * Ctint;
+            Real eta = dot(vertex.geometric_normal, dir_in) > 0 ? bsdf.eta : 1 / bsdf.eta;
+            Spectrum Ks = (1 - specular_tint) + specular_tint * Ctint;
             Real r0 = (1.0 - eta) / (1.0 + eta);
             r0 = r0 * r0;
-            C0 = specular * r0 * (1 - metallic) * Ks + metallic * base_clr;
+            Spectrum C0 = specular * r0 * (1 - metallic) * Ks + metallic * base_clr;
         }
         Texture<Spectrum> C0_tex = make_constant_spectrum_texture(C0);
 
-        DisneyDiffuse diffuse = {bsdf.base_color, bsdf.roughness, bsdf.subsurface};
-        DisneyClearcoat clearcoat = {bsdf.clearcoat_gloss};
-        DisneyMetal metal = {bsdf.base_color, bsdf.roughness, bsdf.anisotropic};
-        DisneyGlass glass = {bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta};
-        DisneySheen sheen = {bsdf.base_color, bsdf.sheen_tint};
+        DisneyDiffuse diffuse_bsdf = {bsdf.base_color, bsdf.roughness, bsdf.subsurface};
+        DisneyClearcoat clearcoat_bsdf = {bsdf.clearcoat_gloss};
+        DisneyMetal metal_bsdf = {C0_tex, bsdf.roughness, bsdf.anisotropic};
+        DisneyGlass glass_bsdf = {bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta};
+        DisneySheen sheen_bsdf = {bsdf.base_color, bsdf.sheen_tint};
         
         std::vector<Real> weights;
         weightComputation(specular_transmission, metallic, cc, sh, weights);
 
-        result += weights[0] * (*this)(diffuse);
-        result += weights[1] * (*this)(clearcoat);
-        result += weights[2] * (*this)(metal);
-        result += weights[3] * (*this)(glass);
-        result += weights[4] * (*this)(sheen);
+        result += weights[0] * (*this)(diffuse_bsdf);
+        result += weights[1] * (*this)(clearcoat_bsdf);
+        result += weights[2] * (*this)(metal_bsdf);
+        result += weights[3] * (*this)(glass_bsdf);
+        result += weights[4] * (*this)(sheen_bsdf);
 
         return result;
     }
