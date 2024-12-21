@@ -51,7 +51,7 @@ Spectrum eval_op::operator()(const DisneyBSDF &bsdf) const {
             Spectrum Ks = (1 - specular_tint) + specular_tint * Ctint;
             Real r0 = (1.0 - eta) / (1.0 + eta);
             r0 = r0 * r0;
-            Spectrum C0 = specular * r0 * (1 - metallic) * Ks + metallic * base_clr;
+            C0 = specular * r0 * (1 - metallic) * Ks + metallic * base_clr;
         }
         Texture<Spectrum> C0_tex = make_constant_spectrum_texture(C0);
 
@@ -60,15 +60,30 @@ Spectrum eval_op::operator()(const DisneyBSDF &bsdf) const {
         DisneyMetal metal_bsdf = {C0_tex, bsdf.roughness, bsdf.anisotropic};
         DisneyGlass glass_bsdf = {bsdf.base_color, bsdf.roughness, bsdf.anisotropic, bsdf.eta};
         DisneySheen sheen_bsdf = {bsdf.base_color, bsdf.sheen_tint};
-        
+
+        Spectrum f_Diffuse = make_zero_spectrum();
+        Spectrum f_Clearcoat = make_zero_spectrum();
+        Spectrum f_Sheen = make_zero_spectrum();
+        Spectrum f_Glass = make_zero_spectrum();
+        Spectrum f_Metal = make_zero_spectrum();
+
+
+        f_Glass = this->operator()(glass_bsdf);
+        if (dot(vertex.geometric_normal, dir_out) > 0)
+        {
+            f_Metal = this->operator()(metal_bsdf);
+            f_Diffuse = this->operator()(diffuse_bsdf);
+            f_Clearcoat = this->operator()(clearcoat_bsdf);
+            f_Sheen = this->operator()(sheen_bsdf);
+        }
         std::vector<Real> weights;
         weightComputation(specular_transmission, metallic, cc, sh, weights);
 
-        result += weights[0] * (*this)(diffuse_bsdf);
-        result += weights[1] * (*this)(clearcoat_bsdf);
-        result += weights[2] * (*this)(metal_bsdf);
-        result += weights[3] * (*this)(glass_bsdf);
-        result += weights[4] * (*this)(sheen_bsdf);
+        result += weights[0] * f_Diffuse;
+        result += weights[1] * f_Clearcoat;
+        result += weights[2] * f_Metal;
+        result += weights[3] * f_Glass;
+        result += weights[4] * f_Sheen;
 
         return result;
     }
