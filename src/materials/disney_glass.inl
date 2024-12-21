@@ -1,5 +1,7 @@
 #include "../microfacet.h"
 
+inline Real square(Real x) { return x * x; }
+
 Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
     bool reflect = dot(vertex.geometric_normal, dir_in) *
                    dot(vertex.geometric_normal, dir_out) > 0;
@@ -15,37 +17,40 @@ Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
     Real alpha_x, alpha_y;
     AnisoTransform(roughness, aniso, alpha_x, alpha_y);
 
+    bool inner = dot(vertex.geometric_normal, dir_in) < 0;
+    Real eta = inner ? 1 / bsdf.eta : bsdf.eta;
 
-    bool inner = dot(frame.n, dir_in) < 0;
-    Real eta = inner ? bsdf.eta : Real(1) / bsdf.eta; // internal IOR t / externalIOR i (dir_in is external to material)
-    
     Real n_dot_in = fabs(dot(frame.n, dir_in));
     Real n_dot_out = fabs(dot(frame.n, dir_out));
-    
+
     Vector3 half_vector;
     if(reflect)half_vector = normalize(dir_in + dir_out); 
-    else half_vector = normalize(-dir_in - eta * dir_out);
-    half_vector = dot(frame.n, half_vector) > 0 ? half_vector : -half_vector; // sync half_vec in the same side with frame normal
+    else {
+        half_vector = normalize(-dir_in - eta * dir_out);
+        if(length_squared(-dir_in - eta * dir_out) < 1e-3) {
+            half_vector = normalize(cross(cross(dir_out, frame.n), dir_out));
+        }
+    }
+    if (dot(half_vector, frame.n) < 0) half_vector = -half_vector;
 
-    Real h_dot_in = fabs(dot(half_vector, dir_in)); // cos(theta_i)
-    Real h_dot_out = fabs(dot(half_vector, dir_out)); // cos(theta_t)
+    Real h_dot_in = dot(half_vector, dir_in); // cos(theta_i)
+    Real h_dot_out = dot(half_vector, dir_out); // cos(theta_t)
 
-
-    bool criticCheck = (1 - h_dot_out * h_dot_out) * eta * eta < 1;
-    Real F_g = (criticCheck) ? fresnel_dielectric(h_dot_in, h_dot_out, eta) : Real(1);
-    // doesnt matter if reflection or refraction since always squared
+    
+    Real F_g =  fresnel_dielectric(std::abs(h_dot_in), eta);
     Real G_g = smith_masking_gtr2_aniso(to_local(frame, dir_in), alpha_x, alpha_y) *
                smith_masking_gtr2_aniso(to_local(frame, dir_out), alpha_x, alpha_y);
     Real D_g = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
-
-    Real GGX;
-    if(reflect) GGX = F_g * G_g * D_g / (4 * n_dot_in);
-    else {
-        Real denominator = h_dot_in + h_dot_out * eta;
-        GGX = (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in * eta * eta / ( denominator * denominator );
+    if (reflect)
+    {
+        return base_clr * F_g * G_g * D_g / (4 * n_dot_in);
     }
-
-    return base_clr * GGX;
+    else
+    {
+        Real denominator = h_dot_in + h_dot_out * eta;
+        // return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in * eta * eta / ( denominator * denominator );
+        return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in / ( denominator * denominator );
+    }
 }
 
 Real pdf_sample_bsdf_op::operator()(const DisneyGlass &bsdf) const {
@@ -64,31 +69,29 @@ Real pdf_sample_bsdf_op::operator()(const DisneyGlass &bsdf) const {
     AnisoTransform(roughness, aniso, alpha_x, alpha_y);
 
 
-    bool inner = dot(frame.n, dir_in) < 0;
-    Real eta = inner ? bsdf.eta : Real(1) / bsdf.eta; // internal IOR t / externalIOR i (dir_in is external to material)
+    bool inner = dot(vertex.geometric_normal, dir_in) < 0;
+    Real eta = inner ? 1 / bsdf.eta : bsdf.eta;
 
-    Real n_dot_in = fabs(dot(frame.n, dir_in));
-    Real n_dot_out = fabs(dot(frame.n, dir_out));
-    
     Vector3 half_vector;
     if(reflect)half_vector = normalize(dir_in + dir_out); 
-    else half_vector = normalize(-dir_in - eta * dir_out);
-    half_vector = dot(frame.n, half_vector) > 0 ? half_vector : -half_vector; // sync half_vec in the same side with frame normal
+    else half_vector = normalize(dir_in + eta * dir_out);
+    if (dot(half_vector, frame.n) < 0) half_vector = -half_vector;
 
-    Real h_dot_in = fabs(dot(half_vector, dir_in)); // cos(theta_i)
-    Real h_dot_out = fabs(dot(half_vector, dir_out)); // cos(theta_t)
+    Real h_dot_in = dot(half_vector, dir_in);
+    Real h_dot_out = dot(half_vector, dir_out);
 
 
-    bool criticCheck = (1 - h_dot_out * h_dot_out) * eta * eta < 1;
-    Real F_g = (criticCheck) ? fresnel_dielectric(h_dot_in, h_dot_out, eta) : Real(1);
+    Real F_g = fresnel_dielectric(h_dot_in, eta);
     Real D_g = GTR2Aniso(to_local(frame, half_vector), alpha_x, alpha_y);
-
-    Real pdf_reflect = D_g / (4 * h_dot_in);
-    Real numerator = h_dot_in + h_dot_out * eta;
-    Real pdf_refract = D_g * h_dot_out / (numerator * numerator);
-
-    return F_g * pdf_reflect + (1 - F_g) * pdf_refract;
+    if (reflect) return (F_g * D_g) / (4 * fabs(h_dot_in));
+    else
+    {
+        Real numerator = h_dot_in + h_dot_out * eta;
+        Real jacobian = eta * eta / (numerator * numerator);
+        return (1 - F_g) * D_g * jacobian * fabs(h_dot_in);
+    }
 }
+
 
 Vector3 reflect(const Vector3 &i, const Vector3 &h) {
     return normalize(-i + 2 * dot(i, h) * h);
@@ -101,9 +104,11 @@ Vector3 refract(const Vector3 &i, const Vector3 &h, Real eta) {
 
     // Total Internal Reflection
     if (sin2_theta_t >= 1) return Vector3(0);
+    auto half = h;
+    if(cos_theta_i < 0) half = -h;
 
     Real cos_theta_t = sqrt(1 - sin2_theta_t);
-    return normalize(eta * -i + (eta * cos_theta_i - cos_theta_t) * h);
+    return normalize(-i / eta + (fabs(cos_theta_i) / eta - cos_theta_t) * half);
 }
 
 std::optional<BSDFSampleRecord>
@@ -114,39 +119,30 @@ std::optional<BSDFSampleRecord>
         frame = -frame;
     }
     // Homework 1: implement this!
-    Spectrum base_clr = eval(bsdf.base_color, vertex.uv, vertex.uv_screen_size, texture_pool);
     Real roughness = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
     Real aniso = eval(bsdf.anisotropic, vertex.uv, vertex.uv_screen_size, texture_pool);
     Real alpha_x, alpha_y;
     AnisoTransform(roughness, aniso, alpha_x, alpha_y);
 
-
-    bool inner = dot(frame.n, dir_in) < 0;
-    Real eta = inner ? bsdf.eta : Real(1) / bsdf.eta; // internal IOR t / externalIOR i (dir_in is external to material)
-
-
-    Vector3 local_in = inner ? to_local(frame, -dir_in) : to_local(frame, dir_in);
+    // Sample a micro normal and transform it to world space -- this is our half-vector.
+    bool inner = dot(vertex.geometric_normal, dir_in) < 0;
+    Real eta = inner ? 1 / bsdf.eta : bsdf.eta;
+    Vector3 local_in = to_local(frame, dir_in);
     Vector3 half_vector = to_world(frame, sample_visible_normals(local_in, alpha_x, alpha_y, rnd_param_uv));
-    half_vector = dot(dir_in, half_vector) > 0 ? half_vector : -half_vector;
-
-    Real h_dot_in = fabs(dot(half_vector, dir_in)); // cos(theta_i)
-    
-
-    Vector3 dir_out = reflect(dir_in, half_vector);
-    Real F_g = fresnel_dielectric(h_dot_in, eta);
-    if(F_g < rnd_param_w){
-        Vector3 refracted = refract(dir_in, half_vector, eta);
-        if(refracted.x != 0 || refracted.y != 0 || refracted.z != 0)
-            dir_out = refracted;
+    if (dot(half_vector, frame.n) < 0) half_vector = -half_vector;
+    Real F_g = fresnel_dielectric(dot(half_vector, dir_in), eta);
+    if (F_g > rnd_param_w)
+    {
+        Vector3 reflected = reflect(dir_in, half_vector);
+        return BSDFSampleRecord{ reflected, Real(0), roughness };
     }
-
-    return BSDFSampleRecord{
-        dir_out,
-        eta, 
-        roughness
-    };
+    else
+    {
+        Vector3 refracted = refract(dir_in, half_vector, eta);
+        if(refracted == Vector3(0)) return {};
+        return BSDFSampleRecord{ refracted, eta, roughness };
+    }
 }
-
 TextureSpectrum get_texture_op::operator()(const DisneyGlass &bsdf) const {
     return bsdf.base_color;
 }
