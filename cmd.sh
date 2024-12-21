@@ -17,4 +17,5 @@ msbuild ./build/lajolla.sln /p:Configuration=Release
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_glass.xml
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_sheen.xml
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_bsdf.xml
+./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_bsdf_array.xml
 

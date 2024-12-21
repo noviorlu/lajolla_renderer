@@ -46,9 +46,8 @@ Spectrum eval_op::operator()(const DisneyGlass &bsdf) const {
     else
     {
         Real denominator = h_dot_in + h_dot_out * eta;
-        // return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in * eta * eta / ( denominator * denominator );
-        // return base_clr * (1 - F_g) * G_g * D_g * (h_dot_in * h_dot_out) / n_dot_in / ( denominator * denominator );
         return base_clr * ((1 - F_g) * G_g * D_g * abs(h_dot_in * h_dot_out)) * eta * eta / (abs(n_dot_in) * denominator * denominator);
+        // return sqrt(base_clr) * ((1 - F_g) * G_g * D_g * abs(h_dot_in * h_dot_out)) / (abs(n_dot_in) * denominator * denominator);
     }
 }
 

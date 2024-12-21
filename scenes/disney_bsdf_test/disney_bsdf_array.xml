@@ -512,7 +512,7 @@
 		</transform>
 
 		<sampler type="independent">
-			<integer name="sampleCount" value="1024"/>
+			<integer name="sampleCount" value="16"/>
 		</sampler>
 
 		<film type="hdrfilm" id="film">
@@ -520,6 +520,7 @@
 			<integer name="height" value="1024"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+			<string name="filename" value="images/disney_bsdf_array.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>
