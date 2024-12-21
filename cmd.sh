@@ -15,7 +15,6 @@ msbuild ./build/lajolla.sln /p:Configuration=Release
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_metal.xml
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_clearcoat.xml
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_glass.xml
-
-
 ./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_sheen.xml
+./build/Release/lajolla.exe .\scenes\disney_bsdf_test\disney_bsdf.xml
 
