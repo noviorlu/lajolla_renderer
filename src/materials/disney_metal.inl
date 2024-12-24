@@ -6,13 +6,15 @@ Spectrum eval_op::operator()(const DisneyMetal &bsdf) const {
         // No light below the surface
         return make_zero_spectrum();
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return make_zero_spectrum();
     }
+
     // Homework 1: implement this!
     Vector3 half_vector = normalize(dir_in + dir_out);
+    if(length_squared(half_vector) == 0) half_vector = frame.n;
+
     Real n_dot_h = dot(frame.n, half_vector);
     Real n_dot_in = dot(frame.n, dir_in);
     Real n_dot_out = dot(frame.n, dir_out);
@@ -48,10 +50,9 @@ Real pdf_sample_bsdf_op::operator()(const DisneyMetal &bsdf) const {
         // No light below the surface
         return 0;
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return 0;
     }
     
     // Homework 1: implement this!
@@ -80,10 +81,9 @@ std::optional<BSDFSampleRecord>
         // No light below the surface
         return {};
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return {};
     }
     
     // Homework 1: implement this!

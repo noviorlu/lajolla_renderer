@@ -6,10 +6,12 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
         // No light below the surface
         return make_zero_spectrum();
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
+
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    Real ndin = dot(frame.n, dir_in);
+    Real ndout = dot(frame.n, dir_out);
+    if (ndin <= 0 || ndout <= 0) {
+        return make_zero_spectrum();
     }
 
     // Homework 1: implement this!
@@ -21,24 +23,24 @@ Spectrum eval_op::operator()(const DisneyDiffuse &bsdf) const {
     if(length_squared(h) == 0) h = frame.n;
     h = normalize(h);
     Real hdout = max(0.0, dot(h, dir_out));
-    Real ndin = max(0.0, dot(frame.n, dir_in));
-    Real ndout = max(0.0, dot(frame.n, dir_out));
+
 
     auto FresnelSchlick = [](Real F0, Real cosTheta) {
         return 1.0 + (F0 - 1.0) * pow(1.0 - cosTheta, 5);
     };
 
     Real FSS90 = roughness * hdout * hdout;
-    Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / (ndin + ndout) - 0.5) + 0.5);
+    
+    Real denominator = ndin + ndout;
+    if(denominator < 0.06) denominator = 0.06;
+    Real ssCoeff = 1.25 * (FresnelSchlick(FSS90, ndin) * FresnelSchlick(FSS90, ndout) * (1.0 / denominator - 0.5) + 0.5);
 
     /* 2012 Disney */
-    // if(ndout == 0) return make_zero_spectrum();
     // Real FD90 = 0.5 + 2 * FSS90;
     // Real baseCoeff = FresnelSchlick(FD90, ndin) * FresnelSchlick(FD90, ndout);
     // return base_color / c_PI * ( (1.0 - ss) * baseCoeff + ss * ssCoeff ) * ndout;
     
     /* 2015 Disney */
-    if(ndout == 0) return make_zero_spectrum();
     Real FL = pow((1 - ndin), Real(5));
     Real FV = pow((1 - ndout), Real(5));
     Real Rr = 2 * FSS90;
@@ -72,10 +74,10 @@ Real pdf_sample_bsdf_op::operator()(const DisneyDiffuse &bsdf) const {
         // No light below the surface
         return 0;
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
+
     Frame frame = vertex.shading_frame;
     if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+        return 0;
     }
     
     // Homework 1: implement this!
@@ -87,14 +89,22 @@ std::optional<BSDFSampleRecord> sample_bsdf_op::operator()(const DisneyDiffuse &
         // No light below the surface
         return {};
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
+
     Frame frame = vertex.shading_frame;
     if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+        return {};
     }
     
     // Homework 1: implement this!
     Real roughness = eval(bsdf.roughness, vertex.uv, vertex.uv_screen_size, texture_pool);
+    
+    Vector3 dir_out = to_world(frame, sample_cos_hemisphere(rnd_param_uv));
+    if(dot(dir_out, frame.n) < 0) {
+        std::cout << "dir_out: " << dir_out << std::endl;
+        std::cout << "frame.n: " << frame.n << std::endl;
+        exit(0);
+    }
+
     return BSDFSampleRecord{
         to_world(frame, sample_cos_hemisphere(rnd_param_uv)),
         Real(0) /* eta */, Real(roughness) /* roughness */};

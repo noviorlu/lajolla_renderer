@@ -6,10 +6,9 @@ Spectrum eval_op::operator()(const DisneySheen &bsdf) const {
         // No light below the surface
         return make_zero_spectrum();
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return make_zero_spectrum();
     }
 
     // Homework 1: implement this!
@@ -31,10 +30,9 @@ Real pdf_sample_bsdf_op::operator()(const DisneySheen &bsdf) const {
         // No light below the surface
         return 0;
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return 0;
     }
 
     // Homework 1: implement this!
@@ -47,10 +45,9 @@ std::optional<BSDFSampleRecord>
         // No light below the surface
         return {};
     }
-    // Flip the shading frame if it is inconsistent with the geometry normal
     Frame frame = vertex.shading_frame;
-    if (dot(frame.n, dir_in) < 0) {
-        frame = -frame;
+    if (dot(frame.n, dir_in) <= 0) {
+        return {};
     }
 
     // Homework 1: implement this!
