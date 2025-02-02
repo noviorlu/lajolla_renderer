@@ -46,7 +46,7 @@ Spectrum vol_path_tracing_2(const Scene &scene,
     RayDifferential ray_diff = RayDifferential{Real(0), Real(0)};
     std::optional<PathVertex> vertex_ = intersect(scene, ray, ray_diff);
     
-    Real t_hit = std::numeric_limits<Real>::infinity();
+    Real t_hit = infinity<Real>();
     Medium medium = scene.media[scene.camera.medium_id];
     PathVertex vertex;
     if (vertex_) {
@@ -84,38 +84,92 @@ Spectrum vol_path_tracing_2(const Scene &scene,
         PointAndNormal point_on_light =
             sample_point_on_light(light, volume_point, light_uv, shape_w, scene);
         
-        // compute G, p1, L, light_transmittance
-        Real t1 = distance(point_on_light.position, volume_point);
-        Vector3 dir_light = normalize(point_on_light.position - volume_point);
-        
-        Real G1 = 0;
-        Ray shadow_ray{volume_point, dir_light, get_shadow_epsilon(scene), t1 - get_shadow_epsilon(scene)};
-        if (!occluded(scene, shadow_ray))
-            G1 = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (t1 * t1);
 
-        Real p1 = light_pmf(scene, light_id) *
-            pdf_point_on_light(light, point_on_light, volume_point, scene);
+        Spectrum L_distanceSampling = make_zero_spectrum();
+        Real p_distanceSampling = 0;
+        {
+            // compute G, p1, L, light_transmittance
+            Real t_light = distance(point_on_light.position, volume_point);
+            Vector3 dir_light = normalize(point_on_light.position - volume_point);
+            
+            Real G = 0;
+            Ray shadow_ray{volume_point, dir_light, get_shadow_epsilon(scene), t_light - get_shadow_epsilon(scene)};
+            if (!occluded(scene, shadow_ray))
+                G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (t_light * t_light);
 
-        Spectrum L1 = Spectrum(0);
-        if(p1 > 0 && G1 > 0)
-            L1 = emission(light, -dir_light, Real(0), point_on_light, scene);
+            Real p_light = light_pmf(scene, light_id) *
+                pdf_point_on_light(light, point_on_light, volume_point, scene);
 
-        PhaseFunction& phase_function = get_phase_function(medium);
-        Spectrum rho1 = eval(phase_function, -ray.dir, dir_light);
-        
-        Spectrum light_transmittance1 = exp(-t1 * sigma_t);
+            Spectrum L = Spectrum(0);
+            if(p_light > 0 && G > 0)
+                L = emission(light, -dir_light, Real(0), point_on_light, scene);
 
-        Spectrum L_distanceSampling = rho1 * G1 * light_transmittance1 * L1 / p1;
+            PhaseFunction& phase_function = get_phase_function(medium);
+            Spectrum rho = eval(phase_function, -ray.dir, dir_light);
+            
+            Spectrum light_transmittance = exp(-t_light * sigma_t);
 
+            // monochromatic medium
+            Real sigma_ts = sigma_t[0];
+
+            L_distanceSampling = exp(-t * sigma_ts)* rho * G * light_transmittance * L;
+            p_distanceSampling = p_light * exp(-t * sigma_ts) * sigma_ts;
+        }
+        // return sigma_s * L_distanceSampling / p_distanceSampling;
 
         // MIS with equiangular sampling
-        
+        Spectrum L_equiangularSampling = make_zero_spectrum();
+        Real p_equiangularSampling = 0;
+        {
+            Vector3 dir_a = point_on_light.position - ray.org;
+    
+            Real a = dot(dir_a, ray.dir) / length_squared(ray.dir);
+            Real b = t_hit - a;
+            Real D = length(ray.dir * a + ray.org - point_on_light.position);
 
-        // where (transmittance / transmittance_pdf) 
-        //      = exp(-sigma_t * t) / (exp(-sigma_t * t) * sigma_t) = 1 / sigma_t
-        return sigma_a / sigma_t *  L_distanceSampling;
+            Real theta_a = atan(a / D);
+            Real theta_b = atan(b / D);
+
+            Real u_rand = next_pcg32_real<Real>(rng);
+            t = a + D * tan((theta_a  + theta_b) * u_rand - theta_a);
+
+            volume_point = ray.org + t * ray.dir;
+
+            // compute G, p, L, light_transmittance
+            Real t_light = distance(point_on_light.position, volume_point);
+            Vector3 dir_light = normalize(point_on_light.position - volume_point);
+            
+            Real G = 0;
+            Ray shadow_ray{volume_point, dir_light, get_shadow_epsilon(scene), t_light - get_shadow_epsilon(scene)};
+            if (!occluded(scene, shadow_ray))
+                G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (t_light * t_light);
+
+            Real p_light = light_pmf(scene, light_id) *
+                pdf_point_on_light(light, point_on_light, volume_point, scene);
+
+            Spectrum L = Spectrum(0);
+            if(p_light > 0 && G > 0)
+                L = emission(light, -dir_light, Real(0), point_on_light, scene);
+
+            PhaseFunction& phase_function = get_phase_function(medium);
+            Spectrum rho = eval(phase_function, -ray.dir, dir_light);
+            
+            Spectrum light_transmittance = exp(-t_light * sigma_t);
+
+            // monochromatic medium
+            Real sigma_ts = sigma_t[0];
+
+            L_equiangularSampling = exp(-t * sigma_ts)* rho * G * light_transmittance * L;
+            p_equiangularSampling = p_light * D / ((theta_a + theta_b) * (D*D + t_light * t_light));
+        }
+        // return sigma_s * L_equiangularSampling / p_equiangularSampling;
+
+        Real p_sum = p_distanceSampling + p_equiangularSampling;
+        if(p_sum == 0)
+            return make_zero_spectrum();
+        
+        return sigma_s * (L_distanceSampling + L_equiangularSampling) / p_sum;
     }
-    return make_zero_spectrum();
 }
 
 // The third volumetric renderer (not so simple anymore): 

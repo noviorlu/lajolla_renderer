@@ -9,7 +9,7 @@
 	<medium type="homogeneous" id="medium">
 		<rgb name="sigmaA" value="0.1 0.1 0.1"/>
 		<rgb name="sigmaS" value="0.7 0.7 0.7"/>
-		<float name="scale" value="1.0"/>
+		<float name="scale" value="2.0"/>
 
 		<phase type="hg">
 			<float name="g" value="0.5"/>
@@ -18,7 +18,7 @@
 
 	<shape type="sphere">
 		<point name="center" x="0" y="0" z="0"/>
-		<float name="radius" value="0.2"/>
+		<float name="radius" value="0.5"/>
 
 		<emitter type="area">
 			<rgb name="radiance" value="0.4 2.32 3.2"/>
@@ -54,7 +54,7 @@
 		</transform>
 
 		<sampler type="independent">
-			<integer name="sampleCount" value="1024"/>
+			<integer name="sampleCount" value="512"/>
 		</sampler>
 
 		<film type="hdrfilm" id="film">
@@ -62,7 +62,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
-			<string name="filename" value="images/volpath_test2_1.0scale.exr"/>
+			<string name="filename" value="images/volpath_test2_mis.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>
