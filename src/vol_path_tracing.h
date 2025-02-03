@@ -172,11 +172,14 @@ Spectrum vol_path_tracing_2(const Scene &scene,
     }
 }
 
-int update_medium(const PathVertex& isect, const Ray& ray){
-    int medium_id = isect.interior_medium_id;
+int update_medium(const PathVertex& isect, const Ray& ray, int current_medium_id){
+    int medium_id = current_medium_id;
     if(isect.interior_medium_id != isect.exterior_medium_id){
         if(dot(ray.dir, isect.geometric_normal) > 0){
             medium_id = isect.exterior_medium_id;
+        }
+        else{
+            medium_id = isect.interior_medium_id;
         }
     }
     return medium_id;
@@ -205,66 +208,59 @@ Spectrum vol_path_tracing_3(const Scene &scene,
     const int rr_depth = scene.options.rr_depth;
 
     while(true){
-        bool isScatter = false;
-        std::optional<PathVertex> vertex_ = intersect(scene, ray, ray_diff);
-        Real t_hit = infinity<Real>();
-        if(vertex_){
-            t_hit = distance((*vertex_).position, ray.org);
-        }
-
-        Spectrum sigma_a = make_zero_spectrum();
-        Spectrum sigma_s = make_zero_spectrum();
-        Spectrum sigma_t = make_zero_spectrum();
-
-        Spectrum transmittance = fromRGB(Vector3{1, 1, 1});
+        bool scatter = false;
+        std::optional<PathVertex> isect_ = intersect(scene, ray, ray_diff);
+        
+        Real transmittance = Real(1);
         Real trans_pdf = Real(1);
+        Real sigma_s = Real(0);
 
         if(current_medium_id != -1){
-            Medium current_medium = scene.media[current_medium_id];
-            sigma_a = get_sigma_a(current_medium, Vector3(0));
-            sigma_s = get_sigma_s(current_medium, Vector3(0));
-            sigma_t = sigma_a + sigma_s;
+            const Medium& current_medium = scene.media[current_medium_id];
+            Real sigma_a = get_sigma_a(current_medium, ray.org)[0];
+            sigma_s = get_sigma_s(current_medium, ray.org)[0];
+            Real sigma_t = sigma_a + sigma_s;
 
-            Real t = -log(1 - next_pcg32_real<Real>(rng)) / sigma_t[0];
+            Real t = -log(1 - next_pcg32_real<Real>(rng)) / sigma_t;
+
+            Real t_hit = infinity<Real>();
+            if(isect_){
+                t_hit = distance((*isect_).position, ray.org);
+            }
 
             if(t < t_hit){
-                isScatter = true;
+                scatter = true;
+                transmittance = exp(-t * sigma_t);
+                trans_pdf = sigma_t * exp(-sigma_t * t);
             }
             else{
-                t = t_hit;
+                // see zhihu section 4.2
+                transmittance = exp(-sigma_t * t_hit);
+                trans_pdf = exp(-sigma_t * t_hit);
             }
-
-            transmittance = exp(-t * sigma_t);
-            trans_pdf = sigma_t[0] * exp(-sigma_t[0] * t);
 
             ray.org += t * ray.dir;
         }
 
         current_path_throughput *= (transmittance / trans_pdf);
 
+        if(!scatter && isect_ && is_light(scene.shapes[isect_->shape_id])){
+            radiance += current_path_throughput * emission(*isect_, -ray.dir, scene);
+        }
+
         // Reach max bounces
         if(bounces == max_depth - 1 && max_depth != -1) break; 
 
-        if(isScatter == false && vertex_){
-			PathVertex vertex = *vertex_;
-
-            // reach a emission surface
-            if(get_area_light_id(scene.shapes[vertex.shape_id]) != -1){
-                radiance += current_path_throughput * emission(vertex, -ray.dir, scene);
-            }
-            
-            // Index-matched surface, pass through
-            if(vertex.material_id == -1){
-                current_medium_id = update_medium(vertex, ray);
-                bounces++;
-                continue;
-            }
+        // Index-matched surface, pass through
+        if(!scatter && isect_ && (*isect_).material_id == -1){
+            current_medium_id = update_medium(*isect_, ray, current_medium_id);
+            bounces++;
+            continue;
         }
 
         // Scatter YES, sample dir & update path throughput
-        if(isScatter){
-            Medium current_medium = scene.media[current_medium_id];
-            PhaseFunction& phase_function = get_phase_function(current_medium);
+        if(scatter){
+            PhaseFunction& phase_function = get_phase_function(scene.media[current_medium_id]);
             Vector2 phase_func_param_uv{next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng)};
 
             std::optional<Vector3> next_dir_ = sample_phase_function(
@@ -272,10 +268,13 @@ Spectrum vol_path_tracing_3(const Scene &scene,
                 -ray.dir, 
                 phase_func_param_uv
             );
-            assert(next_dir_);
-            Vector3 next_dir = *next_dir_;
-            current_path_throughput *= eval(phase_function, -ray.dir, next_dir) / pdf_sample_phase(phase_function, -ray.dir, next_dir) * sigma_s[0];
-            ray.dir = next_dir;
+            
+            current_path_throughput *= 
+                eval(phase_function, -ray.dir, *next_dir_) / 
+                pdf_sample_phase(phase_function, -ray.dir, *next_dir_) * 
+                sigma_s;
+
+            ray.dir = *next_dir_;
         }
         else{
             break;
@@ -284,7 +283,7 @@ Spectrum vol_path_tracing_3(const Scene &scene,
         // Russian roulette
         Real rr_prob = 1;
         if(bounces >= rr_depth){
-            rr_prob = min(current_path_throughput[0], Real(0.95));
+            rr_prob = min(max(current_path_throughput), Real(0.95));
             if(next_pcg32_real<Real>(rng) > rr_prob){
                 break;
             }else{
