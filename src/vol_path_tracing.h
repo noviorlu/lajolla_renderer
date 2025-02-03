@@ -172,6 +172,14 @@ Spectrum vol_path_tracing_2(const Scene &scene,
     }
 }
 
+int update_medium(const PathVertex& isect, const Ray& ray){
+    int medium_id = isect.interior_medium_id;
+    if(isect.interior_medium_id != isect.exterior_medium_id){
+        medium_id = dot(isect.shading_frame.n, isect.geometric_normal) < 0 ? isect.interior_medium_id : isect.exterior_medium_id;
+    }
+    return medium_id;
+}
+
 // The third volumetric renderer (not so simple anymore): 
 // multiple monochromatic homogeneous volumes with multiple scattering
 // no need to handle surface lighting, only directly visible light source
@@ -179,7 +187,104 @@ Spectrum vol_path_tracing_3(const Scene &scene,
                             int x, int y, /* pixel coordinates */
                             pcg32_state &rng) {
     // Homework 2: implememt this!
-    return make_zero_spectrum();
+    int w = scene.camera.width, h = scene.camera.height;
+    Vector2 screen_pos((x + next_pcg32_real<Real>(rng)) / w,
+                       (y + next_pcg32_real<Real>(rng)) / h);
+    Ray ray = sample_primary(scene.camera, screen_pos);
+    RayDifferential ray_diff = RayDifferential{Real(0), Real(0)};
+    
+    int current_medium_id = scene.camera.medium_id;
+
+    Spectrum current_path_throughput = fromRGB(Vector3{1, 1, 1});
+    Spectrum radiance = make_zero_spectrum();
+    int bounces = 0;
+    const int max_bounces = scene.options.max_depth;
+    const int rr_depth = scene.options.rr_depth;
+
+    while(true){
+        bool isScatter = false;
+        std::optional<PathVertex> vertex_ = intersect(scene, ray, ray_diff);
+        PathVertex vertex = *vertex_;
+        Real t_hit = infinity<Real>();
+        if(vertex_){
+            t_hit = distance(vertex.position, ray.org);
+        }
+
+        Spectrum sigma_a = make_zero_spectrum();
+        Spectrum sigma_s = make_zero_spectrum();
+        Spectrum sigma_t = make_zero_spectrum();
+
+        if(current_medium_id != -1){
+            Medium current_medium = scene.media[current_medium_id];
+            sigma_a = get_sigma_a(current_medium, Vector3(0));
+            sigma_s = get_sigma_s(current_medium, Vector3(0));
+            sigma_t = sigma_a + sigma_s;
+
+            Real t = -log(1 - next_pcg32_real<Real>(rng)) / sigma_t[0];
+
+            if(t < t_hit){
+                isScatter = true;
+            }
+            else{
+                t = t_hit;
+            }
+
+            // where (transmittance / transmittance_pdf) 
+            //      = exp(-sigma_t * t) / (exp(-sigma_t * t) * sigma_t) = 1 / sigma_t 
+            current_path_throughput /= sigma_t[0];
+
+            ray.org += t * ray.dir;
+        }
+
+        // Reach Surface/ EnvMap, include emission
+        if(isScatter == false){
+            radiance += current_path_throughput * emission(vertex, -ray.dir, scene);
+        }
+
+        // Reach max bounces
+        if(bounces == max_bounces - 1 && max_bounces != -1) break; 
+
+        // Index-matched surface, pass through
+        if(isScatter == false && !vertex_ && vertex.material_id == -1){
+            current_medium_id = update_medium(vertex, ray);
+            bounces++;
+            continue;
+        }
+
+        // Scatter YES, sample dir & update path throughput
+        if(isScatter){
+            Medium current_medium = scene.media[current_medium_id];
+
+            PhaseFunction& phase_function = get_phase_function(current_medium);
+
+            Vector3 next_dir = sample_phase_function(
+                phase_function, 
+                -ray.dir, 
+                Vector2(next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng))
+            );
+
+            current_path_throughput *= eval(phase_function, -ray.dir, next_dir) / pdf_sample_phase(phase_function, -ray.dir, next_dir) * sigma_s[0];
+
+            ray.dir = next_dir;
+        }
+        else{
+            break;
+        }
+
+        // Russian roulette
+        Real rr_prob = 1;
+        if(bounces >= rr_depth){
+            rr_prob = min(current_path_throughput[0], Real(0.95));
+            if(next_pcg32_real<Real>(rng) > rr_prob){
+                break;
+            }else{
+                current_path_throughput /= rr_prob;
+            }
+        }
+        bounces++;
+    }
+
+    return radiance;
 }
 
 // The fourth volumetric renderer: 
