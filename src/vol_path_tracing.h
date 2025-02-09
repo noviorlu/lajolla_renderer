@@ -347,11 +347,15 @@ Spectrum next_event_estimation(
     int shadow_medium_id = current_medium_id;
     int shadow_bounces = 0;
 
+    Ray shadow_ray{p, dir_light, get_shadow_epsilon(scene), dist_light - get_shadow_epsilon(scene)};
+    RayDifferential shadow_ray_diff = RayDifferential{Real(0), Real(0)};
+
     while(true){
         Real next_t = distance(point_on_light.position, p);
-        Ray shadow_ray{p, dir_light, get_shadow_epsilon(scene), next_t - get_shadow_epsilon(scene)};
+        shadow_ray.org = p;
+        shadow_ray.tfar = next_t - get_shadow_epsilon(scene);
 
-        std::optional<PathVertex> shadow_isect_ = intersect(scene, shadow_ray, RayDifferential{Real(0), Real(0)});
+        std::optional<PathVertex> shadow_isect_ = intersect(scene, shadow_ray, shadow_ray_diff);
         if(shadow_isect_){
             const PathVertex& shadow_isect = *shadow_isect_;
             next_t = distance(shadow_isect.position, p);
@@ -405,7 +409,9 @@ Spectrum vol_path_tracing_4(const Scene &scene,
     Vector2 screen_pos((x + next_pcg32_real<Real>(rng)) / w,
                        (y + next_pcg32_real<Real>(rng)) / h);
     Ray ray = sample_primary(scene.camera, screen_pos);
-    
+    RayDifferential ray_diff = RayDifferential{Real(0), Real(0)};
+                                
+
     int current_medium_id = scene.camera.medium_id;
 
     Spectrum current_path_throughput = fromRGB(Vector3{1, 1, 1});
@@ -424,7 +430,7 @@ Spectrum vol_path_tracing_4(const Scene &scene,
 
     while(true){
         bool scatter = false;
-        std::optional<PathVertex> isect_ = intersect(scene, ray, RayDifferential{Real(0), Real(0)});
+        std::optional<PathVertex> isect_ = intersect(scene, ray, ray_diff);
         
 /* Recursive Transmittance into path-throughput from Ray origin to dist-sampled point */
         Real sigma_s = Real(0);
@@ -457,6 +463,10 @@ Spectrum vol_path_tracing_4(const Scene &scene,
                 }
 
                 ray.org += t * ray.dir;
+            } else if (isect_) { // 场景globally没有medium
+                ray.org = isect_->position + ray.dir * get_intersection_epsilon(scene);
+            } else { // 场景globally没有medium, 也没有hit到任何物体, 空白区域
+                break;
             }
             current_path_throughput *= (transmittance / trans_pdf);
             multi_trans_pdf *= trans_pdf;
@@ -489,17 +499,6 @@ Spectrum vol_path_tracing_4(const Scene &scene,
 /* Index-matched surface, pass through */
         if (!scatter && isect_ && (*isect_).material_id == -1) {
             current_medium_id = update_medium(*isect_, ray, current_medium_id);
-        
-            if (current_medium_id != -1) {
-                const Medium& current_medium = scene.media[current_medium_id];
-                Real sigma_a = get_sigma_a(current_medium, ray.org)[0];
-                Real sigma_s = get_sigma_s(current_medium, ray.org)[0];
-                Real sigma_t = sigma_a + sigma_s;
-        
-                Real t = distance((*isect_).position, ray.org);
-                multi_trans_pdf *= exp(-sigma_t * t);  // collect PDF
-            }
-        
             bounces++;
             continue;
         }
@@ -508,10 +507,10 @@ Spectrum vol_path_tracing_4(const Scene &scene,
         if(scatter){
             never_scatter = false;
             
-            Spectrum nee_contrib = next_event_estimation(scene, rng, ray.org, ray.dir, current_medium_id, bounces);
-            radiance += current_path_throughput * nee_contrib;
+            Spectrum nee_contrib = next_event_estimation(scene, rng, ray.org, -ray.dir, current_medium_id, bounces);
+            radiance += current_path_throughput * sigma_s* nee_contrib;
 
-            PhaseFunction& phase_function = get_phase_function(scene.media[current_medium_id]);
+            const PhaseFunction& phase_function = get_phase_function(scene.media[current_medium_id]);
             Vector2 phase_func_param_uv{next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng)};
 
             std::optional<Vector3> next_dir_ = sample_phase_function(
