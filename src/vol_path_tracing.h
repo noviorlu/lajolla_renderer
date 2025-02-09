@@ -321,11 +321,11 @@ Spectrum next_event_estimation(
         
         point_on_light = sample_point_on_light(light, p, light_uv, shape_w, scene);
         pdf_light = light_pmf(scene, light_id) * pdf_point_on_light(light, point_on_light, p, scene);
-        L = emission(light, -dir_light, Real(0), point_on_light, scene);
-
+        
         dir_light = normalize(point_on_light.position - p);
-
         dist_light = distance(point_on_light.position, p);
+        
+        L = emission(light, -dir_light, Real(0), point_on_light, scene);
         G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (dist_light * dist_light);
     }
 
@@ -337,7 +337,7 @@ Spectrum next_event_estimation(
         const Medium& current_medium = scene.media[current_medium_id];
         PhaseFunction& phase_function = get_phase_function(current_medium);
         rho = eval(phase_function, dir_in, -dir_light);
-        pdf_phase = pdf_sample_phase(phase_function, dir_in, -dir_light) * G;
+        pdf_phase = pdf_sample_phase(phase_function, dir_in, -dir_light);
     }
 
 
@@ -473,8 +473,9 @@ Spectrum vol_path_tracing_4(const Scene &scene,
                 Real pdf_light = light_pmf(scene, light_id) * pdf_point_on_light(scene.lights[light_id], point_on_light, nee_p_cache, scene);
 
                 Vector3 dir_light = normalize(isect_->position - nee_p_cache);
-                Real t_light = distance(nee_p_cache, point_on_light.position);
-                Real G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (t_light * t_light);
+                Real dist_light = distance(nee_p_cache, point_on_light.position);
+                
+                Real G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (dist_light * dist_light);
                 Real pdf_phase = dir_pdf * multi_trans_pdf * G;
 
                 Real w = (pdf_phase * pdf_phase) / (pdf_light * pdf_light + pdf_phase * pdf_phase);
