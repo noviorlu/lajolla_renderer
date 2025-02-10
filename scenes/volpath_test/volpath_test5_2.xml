@@ -54,6 +54,7 @@
 			<integer name="height" value="512"/>
 			<string name="pixelFormat" value="rgb"/>
 			<boolean name="banner" value="false"/>
+			<string name="filename" value="images/volTest5/volpath_test5_2.exr"/>
 
 			<rfilter type="gaussian"/>
 		</film>

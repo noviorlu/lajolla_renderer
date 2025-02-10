@@ -26,3 +26,6 @@ msbuild ./build/lajolla.sln /p:Configuration=Release
 ./build/Release/lajolla.exe .\scenes\volpath_test\volpath_test4.xml
 ./build/Release/lajolla.exe .\scenes\volpath_test\volpath_test4_2.xml
 ./build/Release/lajolla.exe .\scenes\volpath_test\volpath_test5.xml
+./build/Release/lajolla.exe .\scenes\volpath_test\volpath_test5_2.xml
+./build/Release/lajolla.exe .\scenes\volpath_test\vol_cbox.xml
+./build/Release/lajolla.exe .\scenes\volpath_test\vol_cbox_teapot.xml
