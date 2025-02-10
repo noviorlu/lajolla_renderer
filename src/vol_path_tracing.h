@@ -677,6 +677,7 @@ Spectrum vol_path_tracing_5(const Scene &scene,
     Vector2 screen_pos((x + next_pcg32_real<Real>(rng)) / w,
                         (y + next_pcg32_real<Real>(rng)) / h);
     Ray ray = sample_primary(scene.camera, screen_pos);
+    ray.tnear = get_intersection_epsilon(scene);
     RayDifferential ray_diff = RayDifferential{Real(0), Real(0)};
                                 
 
@@ -727,12 +728,11 @@ Spectrum vol_path_tracing_5(const Scene &scene,
                     // see zhihu section 4.2
                     transmittance = exp(-sigma_t * t_hit);
                     trans_pdf = transmittance;
-                    t = t_hit + get_intersection_epsilon(scene);
+                    t = t_hit;
                 }
-
                 ray.org += t * ray.dir;
             } else if (isect_) { // 场景globally没有medium
-                ray.org = isect_->position + ray.dir * get_intersection_epsilon(scene);
+                ray.org = isect_->position;
             } else { // 场景globally没有medium, 也没有hit到任何物体, 空白区域
                 break;
             }
@@ -813,6 +813,9 @@ Spectrum vol_path_tracing_5(const Scene &scene,
             
             dir_pdf = pdf_sample_bsdf(mat, -ray.dir, bsdf_sample.dir_out, *isect_, scene.texture_pool);
             current_path_throughput *= eval(mat, -ray.dir, bsdf_sample.dir_out, *isect_, scene.texture_pool) / dir_pdf;
+            
+            // refracted, update medium
+            if(bsdf_sample.eta != 0) current_medium_id = update_medium(isect, ray, current_medium_id);
 
             ray.dir = bsdf_sample.dir_out;
 
