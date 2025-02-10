@@ -297,15 +297,13 @@ Spectrum vol_path_tracing_3(const Scene &scene,
 }
 
 
-
-
 Spectrum next_event_estimation_v(
     const Scene &scene, pcg32_state &rng,
-    Vector3& p, const Vector3& dir_in, 
+    Vector3 p, const Vector3& dir_in, 
     int current_medium_id, int bounces
 )
 {
-/* Light Source Sampling Related*/
+    /* Light Source Sampling Related*/
     PointAndNormal point_on_light;
     Vector3 dir_light;
     Real pdf_light = Real(0);
@@ -328,6 +326,8 @@ Spectrum next_event_estimation_v(
         L = emission(light, -dir_light, Real(0), point_on_light, scene);
         G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (dist_light * dist_light);
     }
+    if(max(L) == 0) return make_zero_spectrum();
+    if(G == 0) return make_zero_spectrum();
 
 
 /* Phase function Related */
@@ -340,8 +340,9 @@ Spectrum next_event_estimation_v(
         pdf_phase = pdf_sample_phase(phase_function, dir_in, -dir_light);
     }
 
+    if(max(rho) == 0) return make_zero_spectrum();
 
-    Real T_light = Real(1); // Transmittance from point p to light
+    Spectrum T_light = make_const_spectrum(1); // Transmittance from point p to light
     Real p_trans_dir = 1; // probability of multiple transmitance, for importance sampling phase function pdf
     
     int shadow_medium_id = current_medium_id;
@@ -375,7 +376,13 @@ Spectrum next_event_estimation_v(
         if(!shadow_isect_) break; // reaches light source
         else{ // something block in between p and lightsource
             const PathVertex& shadow_isect = *shadow_isect_;
-            if(shadow_isect.material_id >= 0) return make_zero_spectrum(); // opaque surface, blocked no contribution
+            if(shadow_isect.material_id >= 0) {
+                // take bsdf into account
+                const Material& mat = scene.materials[shadow_isect.material_id];
+                Spectrum bsdf = eval(mat, dir_light, -dir_light, shadow_isect, scene.texture_pool);
+                Real pdf_bsdf = pdf_sample_bsdf(mat, dir_light, -dir_light, shadow_isect, scene.texture_pool);
+                T_light *= bsdf / pdf_bsdf;
+            }
 
             shadow_bounces++; // if reaches max bouncing then also no contribution
             if(scene.options.max_depth != -1 && bounces + shadow_bounces + 1 >= scene.options.max_depth) return make_zero_spectrum();
@@ -386,7 +393,7 @@ Spectrum next_event_estimation_v(
     }
 
 
-    if(T_light > 0){
+    if(max(T_light) > 0){
         Spectrum contrib = T_light * G * rho * L / pdf_light;
         // phase function sampling + multiple exponential sampling will reach the light source. (also solid angle to Area)
         pdf_phase *= p_trans_dir * G; 
@@ -548,13 +555,15 @@ Spectrum vol_path_tracing_4(const Scene &scene,
 }
 
 
-Spectrum next_event_estimation(
+inline Spectrum next_event_estimation_s(
     const Scene &scene, pcg32_state &rng,
-    Vector3 p, const PathVertex& isect, const Vector3& dir_in, 
-    int current_medium_id, int bounces, bool isVolume
-)
-{
-    /* Light Source Sampling Related*/
+    const PathVertex& isect, const Vector3& dir_in, 
+    int current_medium_id, int bounces
+) {
+    Vector3 p = isect.position;
+    const Material& material = scene.materials[isect.material_id];
+
+/* Light Source Sampling Related*/
     PointAndNormal point_on_light;
     Vector3 dir_light;
     Real pdf_light = Real(0);
@@ -577,29 +586,12 @@ Spectrum next_event_estimation(
         L = emission(light, -dir_light, Real(0), point_on_light, scene);
         G = max(abs(dot(dir_light, point_on_light.normal)), Real(0)) / (dist_light * dist_light);
     }
-    if(max(L) == 0) return make_zero_spectrum();
-    if(G == 0) return make_zero_spectrum();
 
 
-    /* Phase function Related */
-    Spectrum val = Spectrum(1);
-    Real pdf = 1;
-    if(isVolume){
-        if(current_medium_id != -1){
-            const Medium& current_medium = scene.media[current_medium_id];
-            PhaseFunction& phase_function = get_phase_function(current_medium);
-            val = eval(phase_function, dir_in, -dir_light);
-            pdf = pdf_sample_phase(phase_function, dir_in, -dir_light);
-        }
-    }
-    else{
-        if(isect.material_id != -1){
-            const Material& mat = scene.materials[isect.material_id];
-            val = eval(mat, dir_in, -dir_light, isect, scene.texture_pool);
-            pdf = pdf_sample_bsdf(mat, dir_in, -dir_light, isect, scene.texture_pool);
-        }
-    }
-    if(max(val) == 0) return make_zero_spectrum();
+/* BSDF Related */
+    const Material& mat = scene.materials[isect.material_id];
+    Spectrum f = eval(mat, dir_in, dir_light, isect, scene.texture_pool);
+    Real pdf_bsdf = pdf_sample_bsdf(mat, dir_in, dir_light, isect, scene.texture_pool);
 
 
     Spectrum T_light = make_const_spectrum(1); // Transmittance from point p to light
@@ -622,7 +614,7 @@ Spectrum next_event_estimation(
             next_t = distance(shadow_isect.position, p);
         }
         if(shadow_medium_id != -1){
-            Medium shadow_medium = scene.media[shadow_medium_id];
+            const Medium& shadow_medium = scene.media[shadow_medium_id];
 
             Real sigma_a = get_sigma_a(shadow_medium, p)[0];
             Real sigma_s = get_sigma_s(shadow_medium, p)[0];
@@ -654,11 +646,11 @@ Spectrum next_event_estimation(
 
 
     if(max(T_light) > 0){
-        Spectrum contrib = T_light * G * val * L / pdf_light;
+        Spectrum contrib = T_light * G * f * L / pdf_light;
         // phase function sampling + multiple exponential sampling will reach the light source. (also solid angle to Area)
-        pdf *= p_trans_dir * G; 
+        pdf_bsdf *= p_trans_dir * G; 
 
-        Real w = (pdf_light * pdf_light) / (pdf_light * pdf_light + pdf * pdf);
+        Real w = (pdf_light * pdf_light) / (pdf_light * pdf_light + pdf_bsdf * pdf_bsdf);
         return w * contrib;
     }
     return make_zero_spectrum();
@@ -773,9 +765,8 @@ Spectrum vol_path_tracing_5(const Scene &scene,
 
 // Scatter YES, sample dir & update path throughput
         never_sampl_dir = false;
-        PathVertex isect; if(isect_) isect = *isect_;
-        Spectrum nee_contrib = next_event_estimation(scene, rng, ray.org, isect, -ray.dir, current_medium_id, bounces, scatter);
         if(scatter){
+            Spectrum nee_contrib = next_event_estimation_v(scene, rng, ray.org, -ray.dir, current_medium_id, bounces);
             radiance += current_path_throughput * sigma_s * nee_contrib;
 
             const PhaseFunction& phase_function = get_phase_function(scene.media[current_medium_id]);
@@ -796,9 +787,10 @@ Spectrum vol_path_tracing_5(const Scene &scene,
             multi_trans_pdf = 1;
         }
         else{
+            const Material &mat = scene.materials[isect_->material_id];
+            Spectrum nee_contrib = next_event_estimation_s(scene, rng, *isect_, -ray.dir, current_medium_id, bounces);
             radiance += current_path_throughput * nee_contrib;
 
-            const Material& mat = scene.materials[isect_->material_id];
             Vector2 bsdf_rnd_param_uv{next_pcg32_real<Real>(rng), next_pcg32_real<Real>(rng)};
             Real bsdf_rnd_param_w = next_pcg32_real<Real>(rng);
 
@@ -815,7 +807,7 @@ Spectrum vol_path_tracing_5(const Scene &scene,
             current_path_throughput *= eval(mat, -ray.dir, bsdf_sample.dir_out, *isect_, scene.texture_pool) / dir_pdf;
             
             // refracted, update medium
-            if(bsdf_sample.eta != 0) current_medium_id = update_medium(isect, ray, current_medium_id);
+            if(bsdf_sample.eta != 0) current_medium_id = update_medium(*isect_, ray, current_medium_id);
 
             ray.dir = bsdf_sample.dir_out;
 
